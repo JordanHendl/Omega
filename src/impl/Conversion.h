@@ -9,7 +9,7 @@ extern "C"
 
 #include <vector>
 #include <memory>
-
+#include "Frame.h"
 
 namespace omega
 {
@@ -21,18 +21,44 @@ namespace omega
   auto convert( AVPixelFormat fmt ) -> Format ;
   
   auto convert( Format fmt ) -> AVPixelFormat ;
-
+  
+  struct ResampleConfig
+  {
+    AVSampleFormat src ;
+    AVSampleFormat dst ;
+    
+    ResampleConfig()
+    {
+      src = AVSampleFormat::AV_SAMPLE_FMT_S16 ;
+      dst = AVSampleFormat::AV_SAMPLE_FMT_S16 ;
+    }
+  };
+  
   class Scale
   {
     public:
-      Scale( AVPixelFormat src, AVPixelFormat dst ) ;
+      Scale() ;
       
       ~Scale() ;
       
-      auto convert( const AVFrame& src, AVFrame& dst ) -> void ;
+      auto convert( const Frame& src, Frame& dst ) -> void ;
       
     private:
       struct ScaleData ;
       std::unique_ptr<ScaleData> data ;
+  };
+  
+  class Resample
+  {
+    public:
+      Resample() ;
+      
+      ~Resample() ;
+      
+      auto convert( const Frame& src, Frame& dst ) -> void ;
+      
+    private:
+      struct ResampleData ;
+      std::unique_ptr<ResampleData> data ;
   };
 }

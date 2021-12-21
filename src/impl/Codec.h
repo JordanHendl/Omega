@@ -25,7 +25,16 @@ namespace omega
       virtual auto index() -> int ;
       
       virtual auto context() -> AVCodecContext& ;
+      
+      virtual auto duration() -> float ;
+      
+      virtual auto fps() -> float ;
+      
+      virtual auto stream() -> AVStream& ;
+      
+      virtual auto timeBase() -> float ;
     protected:
+      AVStream*          m_stream ;
       AVCodecParameters* m_params ;
       AVCodec*           m_codec  ;
       AVCodecContext*    m_ctx    ;
@@ -53,5 +62,11 @@ namespace omega
     public :
       
       AudioCodec( AVStream* stream, int index ) : Codec( stream, index ) {} ;
+      
+      auto format() -> AVSampleFormat ;
+      
+      auto channels() -> int ;
+      
+      auto sampleRate() -> int ;
   };
 }

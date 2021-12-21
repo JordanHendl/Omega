@@ -21,24 +21,19 @@ extern "C"
   #include <libavcodec/avcodec.h>
   #include <libavformat/avformat.h>
   #include <libswscale/swscale.h>
+  #include <libswresample/swresample.h>
+  #include <libavutil/samplefmt.h>
+  #include <libavutil/opt.h>
+  #include <libavutil/channel_layout.h>
+#include <libavutil/frame.h>
 }
 
 namespace omega
 {
   struct Scale::ScaleData
   {
-    AVPixelFormat src_format ;
-    AVPixelFormat dst_format ;
-    
     SwsContext* ctx ;
-    
-    
-    int src_width  ;
-    int src_height ;
-    
-    int dst_width  ;
-    int dst_height ;
-    
+
     ScaleData()
     {
       this->ctx = nullptr ;
@@ -49,30 +44,45 @@ namespace omega
       
     }
     
-    auto initialize( int sw, int sh, int dw, int dh ) -> void 
+    auto initialize( const Frame& src, Frame& dst ) -> void 
     {
       if( this->ctx ) { sws_freeContext( this->ctx ) ; this->ctx = nullptr ; }
-      this->ctx = sws_getContext( sw, sh, this->src_format, dw, dh, this->dst_format, SWS_BICUBIC, nullptr, nullptr, nullptr ) ;
       
-      this->src_width  = sw ;
-      this->src_height = sh ;
-      this->dst_width  = dw ;
-      this->dst_height = dh ;
+      auto src_format = static_cast<AVPixelFormat>( src->format ) ;
+      auto dst_format = static_cast<AVPixelFormat>( dst->format ) ;
+      
+      this->ctx = sws_getContext( src->width, src->height, src_format, dst->width, dst->height, dst_format, SWS_BICUBIC, nullptr, nullptr, nullptr ) ;
+    }
+  };
+  
+  struct Resample::ResampleData
+  { 
+    SwrContext* ctx ;
+    
+    ResampleData()
+    {
+      this->ctx = nullptr ;
     }
     
-    auto dimsMatch( const AVFrame& src, const AVFrame& dst ) -> bool 
+    ~ResampleData()
     {
-      return ( src.width == this->src_width && src.height == this->src_height ) &&
-             ( dst.width == this->dst_width && dst.height == this->dst_height ) ;  
+      
+    }
+    
+    auto reinitialize( const Frame& src, const Frame& dst ) -> void 
+    {
+      if( this->ctx ) { swr_free( &this->ctx ) ; this->ctx = nullptr ; }
+      this->ctx = swr_alloc() ;
+
+      if( !this->ctx                                              ) throw std::runtime_error( "Failed to allocate resample context." ) ;
+      if( swr_config_frame( this->ctx, &dst.av(), &src.av() ) < 0 ) throw std::runtime_error( "Failed to configure swresample."      ) ;
+      if( ( swr_init( this->ctx ) )                           < 0 ) throw std::runtime_error( "Failed to initialize swresample."     ) ;
     }
   };
 
-  Scale::Scale( AVPixelFormat src, AVPixelFormat dst )
+  Scale::Scale()
   {
     this->data = std::make_unique<ScaleData>() ;
-    
-    this->data->src_format = src ;
-    this->data->dst_format = dst ;
   }
   
   Scale::~Scale()
@@ -80,16 +90,33 @@ namespace omega
     
   }
   
-  auto Scale::convert( const AVFrame& src, AVFrame& dst ) -> void 
+  auto Scale::convert( const Frame& src, Frame& dst ) -> void 
   {
-    if( src.width != 0 && src.height != 0 ) 
+    if( !data->ctx ) data->initialize( src, dst ) ;
+    if( sws_scale( data->ctx, src->data, src->linesize, 0, src->height, dst->data, dst->linesize ) < 0 ) throw std::runtime_error( "Failed to resample image." ) ;
+  }
+
+  Resample::Resample()
+  {
+    this->data = std::make_unique<ResampleData>() ;
+  }
+  
+  Resample::~Resample()
+  {
+    
+  }
+  
+  auto Resample::convert( const Frame& src, Frame& dst ) -> void 
+  {
+    if( data->ctx == nullptr )
     {
-      if( !data->ctx || !data->dimsMatch( src, dst ) )
-      {
-        data->initialize( src.width, src.height, dst.width, dst.height ) ;
-      }
-      
-      sws_scale( data->ctx, src.data, src.linesize, 0, src.height, dst.data, dst.linesize ) ;
+      data->reinitialize( src, dst ) ;
     }
+    
+    auto& ctx = data->ctx ;
+    
+    dst.av().nb_samples = 0 ;
+    auto result = swr_convert_frame( ctx, &dst.av(), &src.av() ) ;
+    if( result < 0 ) throw std::runtime_error( "Failed to resample frame." ) ;
   }
 }

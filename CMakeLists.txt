@@ -43,9 +43,8 @@ add_compile_options( ${COMPILE_OPTIONS} )
 IF( WIN32 )
   SET( CMAKE_PREFIX_PATH "C:\\Program Files\\" CACHE STRING "The default path to look for dependancies." )
 ELSEIF( UNIX AND NOT APPLE )
-  SET( CMAKE_PREFIX_PATH "/usr/local/Catalyst" CACHE STRING "The default path to look for dependancies." )
+  LIST( APPEND CMAKE_PREFIX_PATH "/usr/local/Catalyst" )
 ENDIF()
-
 
 SET( EXPORT_BIN_DIR     bin     )
 SET( EXPORT_INCLUDE_DIR include )
